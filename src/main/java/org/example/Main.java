@@ -9,6 +9,13 @@ import imgui.flag.*;
 import imgui.type.ImBoolean;
 import imgui.type.ImString;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 public class Main extends Application {
     public class Filter {
         public ImString imstr = new ImString(1024);
@@ -29,6 +36,10 @@ public class Main extends Application {
 
     private ImportData importData = new ImportData(new ImString("D:/Projects/log-parser/WV-ST-20240308/", 1024));
 
+    private LogParser logParser = new LogParser();
+    private ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private volatile ILogParser.LoadStatus loadStatus = new ILogParser.LoadStatus(new ArrayList<>(), new ArrayList<>());
 
     @Override
     protected void configure(Configuration config) {
@@ -205,8 +216,21 @@ public class Main extends Application {
         ImGui.begin("Import", imShowImportWindow);
 
         if (ImGui.button("Load")) {
+            executor.submit(() -> {
+                try {
+                    List<Path> paths = new ArrayList<>();
+                    for (int i = 55; i < 570; i++) {
+                        Path p = Paths.get(String.format("D:/Projects/log-parser/WV-ST-20240308/WV-ST-20240308-%04d.log", i));
+                        paths.add(p);
+                    }
 
+                    logParser.load(paths, loadStatus);
+                } catch (InterruptedException e) {
+                    System.out.println(e);
+                }
+            });
         }
+        System.out.println(loadStatus.loadedPaths().size() + " / " + loadStatus.allPaths().size());
 
         ImGui.sameLine();
         ImGui.inputText("Log Directory", importData.imDirectoryPath());
