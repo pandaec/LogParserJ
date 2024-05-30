@@ -1,25 +1,15 @@
 package org.example;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 public class LogParser implements ILogParser {
     @Override
-    public Log load(List<Path> paths, LoadStatus loadStatus) throws InterruptedException {
-        List<LogDetail> lines = new ArrayList<>();
-
-        List<Path> loadedPaths = new ArrayList<>();
-        loadStatus.allPaths().clear();
-        loadStatus.allPaths().addAll(paths);
-
-        for (Path p : paths) {
+    public void load(Log log) throws InterruptedException {
+        log.loadStatus.isLoading = true;
+        for (Path p : log.loadStatus.allPaths) {
             Thread.sleep(750);
-            loadedPaths.add(p);
-            loadStatus.loadedPaths().clear();
-            loadStatus.loadedPaths().addAll(loadedPaths);
+            log.loadStatus.loadedPaths.add(p);
         }
-
-        return new Log(lines);
+        log.loadStatus.isLoading = false;
     }
 }

@@ -2,6 +2,7 @@ package org.example;
 
 import imgui.ImGui;
 import imgui.ImGuiListClipper;
+import imgui.ImVec2;
 import imgui.app.Application;
 import imgui.app.Configuration;
 import imgui.callback.ImListClipperCallback;
@@ -36,10 +37,9 @@ public class Main extends Application {
 
     private ImportData importData = new ImportData(new ImString("D:/Projects/log-parser/WV-ST-20240308/", 1024));
 
-    private LogParser logParser = new LogParser();
     private ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    private volatile ILogParser.LoadStatus loadStatus = new ILogParser.LoadStatus(new ArrayList<>(), new ArrayList<>());
+    private volatile ILogParser.Log db = null;
 
     @Override
     protected void configure(Configuration config) {
@@ -74,6 +74,7 @@ public class Main extends Application {
         }
 
 
+        renderLoadingModal();
         renderLogWindow();
         renderImportWindow();
 
@@ -82,6 +83,20 @@ public class Main extends Application {
 
     public static void main(String[] args) {
         launch(new Main());
+    }
+
+    private void renderLoadingModal() {
+        if (db == null || !db.loadStatus.isLoading) {
+            return;
+        }
+        ImGui.openPopup("Importing...");
+        ImVec2 vec = ImGui.getMainViewport().getCenter();
+        ImGui.setNextWindowPos(vec.x, vec.y, ImGuiCond.Appearing, 0.5f, 0.5f);
+        if (ImGui.beginPopupModal("Importing...", ImGuiWindowFlags.AlwaysAutoResize)) {
+            ImGui.text(String.format("Files loaded: %d / %d", db.loadStatus.loadedPaths.size(), db.loadStatus.allPaths.size()));
+            ImGui.text("Current file");
+            ImGui.endPopup();
+        }
     }
 
     private void renderLogWindow() {
@@ -223,14 +238,14 @@ public class Main extends Application {
                         Path p = Paths.get(String.format("D:/Projects/log-parser/WV-ST-20240308/WV-ST-20240308-%04d.log", i));
                         paths.add(p);
                     }
+                    db = ILogParser.Log.load(paths);
+                    db.start();
 
-                    logParser.load(paths, loadStatus);
                 } catch (InterruptedException e) {
                     System.out.println(e);
                 }
             });
         }
-        System.out.println(loadStatus.loadedPaths().size() + " / " + loadStatus.allPaths().size());
 
         ImGui.sameLine();
         ImGui.inputText("Log Directory", importData.imDirectoryPath());
