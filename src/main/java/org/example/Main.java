@@ -10,9 +10,11 @@ import imgui.flag.*;
 import imgui.type.ImBoolean;
 import imgui.type.ImString;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.IOException;
+import java.nio.file.*;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -32,10 +34,15 @@ public class Main extends Application {
     private ImBoolean imShowLogWindow = new ImBoolean(true);
     private ImBoolean imShowImportWindow = new ImBoolean(true);
 
-    public record ImportData(ImString imDirectoryPath) {
+
+    public class ImportData {
+        ImString imDirectoryPath = new ImString("D:/Projects/log-parser/WV-ST-20240308/", 1024);
+        List<Path> filesLeft = new ArrayList<>();
+        List<Path> filesRight = new ArrayList<>();
+
     }
 
-    private ImportData importData = new ImportData(new ImString("D:/Projects/log-parser/WV-ST-20240308/", 1024));
+    private ImportData importData = new ImportData();
 
     private ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -73,12 +80,9 @@ public class Main extends Application {
             ImGui.endMainMenuBar();
         }
 
-
         renderLoadingModal();
         renderLogWindow();
         renderImportWindow();
-
-
     }
 
     public static void main(String[] args) {
@@ -231,6 +235,49 @@ public class Main extends Application {
         ImGui.begin("Import", imShowImportWindow);
 
         if (ImGui.button("Load")) {
+            importData.filesLeft.clear();
+            importData.filesRight.clear();
+
+            try {
+                String rawPath = importData.imDirectoryPath.toString();
+                Path path = Paths.get(rawPath);
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(path)) {
+                    for (Path entry : stream) {
+                        if (Files.isRegularFile(entry)) {
+                            importData.filesLeft.add(entry);
+                        }
+                    }
+                }
+            } catch (InvalidPathException | IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        ImGui.sameLine();
+        ImGui.inputText("Log Directory", importData.imDirectoryPath);
+
+        ImGui.beginChild("##Left", ImGui.getContentRegionAvailX() / 2, ImGui.getContentRegionAvailY(), true);
+
+        boolean isMoved = false;
+        if (ImGui.button("Stage All")) {
+
+        }
+
+        Iterator<Path> iterLeft = importData.filesLeft.iterator();
+        while (iterLeft.hasNext()) {
+            Path left = iterLeft.next();
+            if (ImGui.selectable(left.getFileName().toString())) {
+                iterLeft.remove();
+                importData.filesRight.add(left);
+                isMoved = true;
+            }
+        }
+
+        ImGui.endChild();
+        ImGui.sameLine();
+
+        ImGui.beginChild("##Right", 0, 0, true);
+        if (ImGui.button("Load Logs")) {
             executor.submit(() -> {
                 try {
                     List<Path> paths = new ArrayList<>();
@@ -247,21 +294,21 @@ public class Main extends Application {
             });
         }
 
-        ImGui.sameLine();
-        ImGui.inputText("Log Directory", importData.imDirectoryPath());
-
-        ImGui.beginChild("##Left", 150, 0, true);
-        if (ImGui.button("Stage All")) {
-
+        Iterator<Path> iterRight = importData.filesRight.iterator();
+        while (iterRight.hasNext()) {
+            Path right = iterRight.next();
+            if (ImGui.selectable(right.getFileName().toString())) {
+                iterRight.remove();
+                importData.filesLeft.add(right);
+                isMoved = true;
+            }
         }
 
-        ImGui.endChild();
-        ImGui.sameLine();
-
-        ImGui.beginChild("##Right", 0, 0, true);
-        if (ImGui.button("Load Logs")) {
-
+        if (isMoved) {
+            Collections.sort(importData.filesLeft);
+            Collections.sort(importData.filesRight);
         }
+
         ImGui.endChild();
         ImGui.end();
     }
