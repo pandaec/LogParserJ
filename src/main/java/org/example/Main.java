@@ -19,12 +19,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public class Main extends Application {
     public class Filter {
-        public ImString imstr = new ImString(1024);
-        public ImBoolean imIsCaseSensitive = new ImBoolean(false);
-        public boolean isRegexError = false;
+        ImString imstr = new ImString(1024);
+        ImBoolean imIsCaseSensitive = new ImBoolean(false);
+        boolean isRegexError = false;
+        Pattern pattern = null;
     }
 
     Filter filter = new Filter();
@@ -115,13 +118,23 @@ public class Main extends Application {
             executor.submit(() -> {
                 List<ILogParser.LogDetail> lines_filtered = new ArrayList<>();
                 String filterStr = filter.imstr.toString();
+                filter.isRegexError = false;
 
-                for (ILogParser.LogDetail detail : db.lines) {
-                    if (detail.threadName.contains(filterStr) || detail.getContent().contains(filterStr)) {
-                        lines_filtered.add(detail);
+                try {
+                    filter.pattern = Pattern.compile(filterStr);
+                    for (ILogParser.LogDetail detail : db.lines) {
+                        if (filter.pattern.matcher(detail.threadName).find()
+                                || filter.pattern.matcher(detail.priority).find()
+                                || filter.pattern.matcher(detail.fileName).find()
+                                || filter.pattern.matcher(detail.getContent()).find()) {
+                            lines_filtered.add(detail);
+                        }
                     }
+                    db.lines_filtered = lines_filtered;
+                } catch (PatternSyntaxException e) {
+                    filter.isRegexError = true;
+                    e.printStackTrace();
                 }
-                db.lines_filtered = lines_filtered;
             });
         }
         ImGui.sameLine();
