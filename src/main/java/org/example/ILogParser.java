@@ -39,6 +39,7 @@ public interface ILogParser {
 
     class Log {
         List<LogDetail> lines = new ArrayList<>();
+        List<LogDetail> lines_filtered = lines;
         LoadStatus loadStatus;
 
         public static Log load(List<Path> paths) {

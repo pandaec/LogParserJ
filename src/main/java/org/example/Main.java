@@ -12,6 +12,7 @@ import imgui.type.ImString;
 
 import java.io.IOException;
 import java.nio.file.*;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -26,14 +27,14 @@ public class Main extends Application {
         public boolean isRegexError = false;
     }
 
-    private Filter filter = new Filter();
-    private Filter detail_filter = new Filter();
+    Filter filter = new Filter();
+    Filter detail_filter = new Filter();
+    ImString imRawText = new ImString(2048);
 
-    private ImString imRawText = new ImString(2048);
+    ImBoolean imShowLogWindow = new ImBoolean(true);
+    ImBoolean imShowImportWindow = new ImBoolean(true);
 
-    private ImBoolean imShowLogWindow = new ImBoolean(true);
-    private ImBoolean imShowImportWindow = new ImBoolean(true);
-
+    DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS");
 
     public class ImportData {
         ImString imDirectoryPath = new ImString("D:/Projects/log-parser/WV-ST-20240308/", 1024);
@@ -44,9 +45,9 @@ public class Main extends Application {
 
     private ImportData importData = new ImportData();
 
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private ExecutorService executor = Executors.newWorkStealingPool();
 
-    private volatile ILogParser.Log db = null;
+    private volatile ILogParser.Log db;
 
     @Override
     protected void configure(Configuration config) {
@@ -111,7 +112,17 @@ public class Main extends Application {
         ImGui.begin("Log Parser", imShowLogWindow);
 
         if (ImGui.inputTextWithHint("Filter", "Filter", filter.imstr, ImGuiInputTextFlags.EnterReturnsTrue)) {
+            executor.submit(() -> {
+                List<ILogParser.LogDetail> lines_filtered = new ArrayList<>();
+                String filterStr = filter.imstr.toString();
 
+                for (ILogParser.LogDetail detail : db.lines) {
+                    if (detail.threadName.contains(filterStr) || detail.getContent().contains(filterStr)) {
+                        lines_filtered.add(detail);
+                    }
+                }
+                db.lines_filtered = lines_filtered;
+            });
         }
         ImGui.sameLine();
         ImGui.checkbox("Case Sensitive", filter.imIsCaseSensitive);
@@ -133,27 +144,30 @@ public class Main extends Application {
             ImGui.tableSetupColumn("Content", ImGuiTableColumnFlags.WidthStretch);
             ImGui.tableHeadersRow();
 
-            ImGuiListClipper.forEach(100_000, new ImListClipperCallback() {
-                @Override
-                public void accept(int index) {
-                    ImGui.tableNextRow();
-                    if (ImGui.tableSetColumnIndex(0)) {
-                        ImGui.text("AAAAA");
-                    }
+            if (db != null) {
+                ImGuiListClipper.forEach(db.lines_filtered.size(), new ImListClipperCallback() {
+                    @Override
+                    public void accept(int i) {
+                        ILogParser.LogDetail detail = db.lines_filtered.get(i);
+                        ImGui.tableNextRow();
+                        if (ImGui.tableSetColumnIndex(0)) {
+                            ImGui.text(dateTimeFormatter.format(detail.time));
+                        }
 
-                    if (ImGui.tableSetColumnIndex(1)) {
-                        ImGui.text("BBBBBB");
-                    }
+                        if (ImGui.tableSetColumnIndex(1)) {
+                            ImGui.text(detail.priority);
+                        }
 
-                    if (ImGui.tableSetColumnIndex(2)) {
-                        ImGui.text("CCCCCCCCC");
-                    }
+                        if (ImGui.tableSetColumnIndex(2)) {
+                            ImGui.text(detail.threadName);
+                        }
 
-                    if (ImGui.tableSetColumnIndex(3)) {
-                        ImGui.text("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
+                        if (ImGui.tableSetColumnIndex(3)) {
+                            ImGui.text(detail.getContent());
+                        }
                     }
-                }
-            });
+                });
+            }
             ImGui.endTable();
         }
 
