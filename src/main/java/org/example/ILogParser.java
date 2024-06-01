@@ -10,7 +10,7 @@ public interface ILogParser {
     class LogDetail {
         final LocalDateTime time;
         final String threadName, priority, fileName;
-        String content;
+        private String content;
         private StringBuilder contentBuilder;
 
         public LogDetail(LocalDateTime time, String threadName, String priority, String fileName, String content) {
