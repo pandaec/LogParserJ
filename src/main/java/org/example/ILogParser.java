@@ -6,8 +6,36 @@ import java.util.ArrayList;
 import java.util.List;
 
 public interface ILogParser {
-    record LogDetail(LocalDateTime time, String threadName, String fileName, String priority, String content) {
+
+    class LogDetail {
+        final LocalDateTime time;
+        final String threadName, priority, fileName;
+        String content;
+        private StringBuilder contentBuilder;
+
+        public LogDetail(LocalDateTime time, String threadName, String priority, String fileName, String content) {
+            this.time = time;
+            this.threadName = threadName;
+            this.priority = priority;
+            this.fileName = fileName;
+            this.contentBuilder = new StringBuilder(content);
+        }
+
+        public String getContent() {
+            if (contentBuilder == null) {
+                return content;
+            }
+
+            content = contentBuilder.toString();
+            contentBuilder = null;
+            return content;
+        }
+
+        public void appendLine(String c) {
+            contentBuilder.append("\n").append(c);
+        }
     }
+
 
     class Log {
         List<LogDetail> lines = new ArrayList<>();
@@ -29,6 +57,7 @@ public interface ILogParser {
         boolean isLoading = false;
         List<Path> loadedPaths = new ArrayList<>();
         List<Path> allPaths;
+        String currentFileName = "";
 
         public LoadStatus(List<Path> paths) {
             allPaths = new ArrayList<>(paths);

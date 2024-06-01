@@ -67,22 +67,26 @@ public class Main extends Application {
 
     @Override
     public void process() {
-        ImGui.dockSpaceOverViewport(ImGui.getMainViewport());
+        try {
+            ImGui.dockSpaceOverViewport(ImGui.getMainViewport());
 
-//         ImGui.showDemoWindow();
+            //         ImGui.showDemoWindow();
 
-        if (ImGui.beginMainMenuBar()) {
-            if (ImGui.beginMenu("Windows")) {
-                ImGui.menuItem("Log", null, imShowLogWindow);
-                ImGui.menuItem("Import", null, imShowImportWindow);
-                ImGui.endMenu();
+            if (ImGui.beginMainMenuBar()) {
+                if (ImGui.beginMenu("Windows")) {
+                    ImGui.menuItem("Log", null, imShowLogWindow);
+                    ImGui.menuItem("Import", null, imShowImportWindow);
+                    ImGui.endMenu();
+                }
+                ImGui.endMainMenuBar();
             }
-            ImGui.endMainMenuBar();
-        }
 
-        renderLoadingModal();
-        renderLogWindow();
-        renderImportWindow();
+            renderLoadingModal();
+            renderLogWindow();
+            renderImportWindow();
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
     }
 
     public static void main(String[] args) {
@@ -98,7 +102,7 @@ public class Main extends Application {
         ImGui.setNextWindowPos(vec.x, vec.y, ImGuiCond.Appearing, 0.5f, 0.5f);
         if (ImGui.beginPopupModal("Importing...", ImGuiWindowFlags.AlwaysAutoResize)) {
             ImGui.text(String.format("Files loaded: %d / %d", db.loadStatus.loadedPaths.size(), db.loadStatus.allPaths.size()));
-            ImGui.text("Current file");
+            ImGui.text(db.loadStatus.currentFileName);
             ImGui.endPopup();
         }
     }
@@ -260,7 +264,9 @@ public class Main extends Application {
 
         boolean isMoved = false;
         if (ImGui.button("Stage All")) {
-
+            importData.filesRight.addAll(importData.filesLeft);
+            importData.filesLeft.clear();
+            isMoved = true;
         }
 
         Iterator<Path> iterLeft = importData.filesLeft.iterator();
@@ -280,16 +286,10 @@ public class Main extends Application {
         if (ImGui.button("Load Logs")) {
             executor.submit(() -> {
                 try {
-                    List<Path> paths = new ArrayList<>();
-                    for (int i = 55; i < 570; i++) {
-                        Path p = Paths.get(String.format("D:/Projects/log-parser/WV-ST-20240308/WV-ST-20240308-%04d.log", i));
-                        paths.add(p);
-                    }
-                    db = ILogParser.Log.load(paths);
+                    db = ILogParser.Log.load(importData.filesRight);
                     db.start();
-
-                } catch (InterruptedException e) {
-                    System.out.println(e);
+                } catch (Throwable e) {
+                    e.printStackTrace();
                 }
             });
         }
