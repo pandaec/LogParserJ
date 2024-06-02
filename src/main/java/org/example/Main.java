@@ -28,9 +28,6 @@ public class Main extends Application {
         Map<String, Pattern> mapPattern = new HashMap<>();
     }
 
-    Filter filter = new Filter();
-    Filter detail_filter = new Filter();
-
     ImBoolean imShowLogWindow = new ImBoolean(true);
     ImBoolean imShowImportWindow = new ImBoolean(true);
 
@@ -49,11 +46,15 @@ public class Main extends Application {
         ImString imRawText = new ImString(50);
     }
 
+    Filter filter = new Filter();
+    Filter filterFind = new Filter();
+
     FindData findData = new FindData();
 
     private final ExecutorService executor = Executors.newWorkStealingPool();
 
     private volatile ILogParser.Log db;
+    private volatile ILogParser.Log dbFind;
 
     @Override
     protected void configure(Configuration config) {
@@ -121,6 +122,9 @@ public class Main extends Application {
             executor.submit(() -> {
                 List<ILogParser.LogDetail> lines_filtered = new ArrayList<>();
                 parseFilter(filter);
+                if (filter.isRegexError) {
+                    return;
+                }
                 try {
                     for (ILogParser.LogDetail detail : db.lines) {
                         if (isLineMatchFilter(detail, filter)) {
@@ -128,8 +132,7 @@ public class Main extends Application {
                         }
                     }
                     db.lines_filtered = lines_filtered;
-                } catch (PatternSyntaxException e) {
-                    filter.isRegexError = true;
+                } catch (Throwable e) {
                     e.printStackTrace();
                 }
             });
@@ -197,15 +200,30 @@ public class Main extends Application {
 
         if (ImGui.beginTabBar("##Tabs")) {
             if (ImGui.beginTabItem("Find")) {
-
-                if (ImGui.inputTextWithHint("##Filter", "Filter", detail_filter.imstr, ImGuiInputTextFlags.EnterReturnsTrue)) {
-
+                if (ImGui.inputTextWithHint("##Filter", "Filter", filterFind.imstr, ImGuiInputTextFlags.EnterReturnsTrue)) {
+                    executor.submit(() -> {
+                        List<ILogParser.LogDetail> lines_filtered = new ArrayList<>();
+                        parseFilter(filterFind);
+                        if (filterFind.isRegexError) {
+                            return;
+                        }
+                        try {
+                            for (ILogParser.LogDetail detail : dbFind.lines) {
+                                if (isLineMatchFilter(detail, filter) && isLineMatchFilter(detail, filterFind)) {
+                                    lines_filtered.add(detail);
+                                }
+                            }
+                            dbFind.lines_filtered = lines_filtered;
+                        } catch (Throwable e) {
+                            e.printStackTrace();
+                        }
+                    });
                 }
                 ImGui.sameLine();
-                ImGui.checkbox("Case Sensitive", filter.imIsCaseSensitive);
+                ImGui.checkbox("Case Sensitive", filterFind.imIsCaseSensitive);
                 ImGui.spacing();
 
-                if (detail_filter.isRegexError) {
+                if (filterFind.isRegexError) {
                     ImGui.textColored(0.8f, 0.0f, 0.0f, 1.0f, "Syntax Error");
                     ImGui.spacing();
                 }
@@ -219,27 +237,39 @@ public class Main extends Application {
                     ImGui.tableSetupColumn("Content", ImGuiTableColumnFlags.WidthStretch);
                     ImGui.tableHeadersRow();
 
-                    ImGuiListClipper.forEach(100_000, new ImListClipperCallback() {
-                        @Override
-                        public void accept(int index) {
-                            ImGui.tableNextRow();
-                            if (ImGui.tableSetColumnIndex(0)) {
-                                ImGui.text("AAAAA");
-                            }
+                    if (dbFind != null) {
+                        ImGuiListClipper.forEach(dbFind.lines_filtered.size(), new ImListClipperCallback() {
+                            @Override
+                            public void accept(int i) {
+                                ILogParser.LogDetail detail = dbFind.lines_filtered.get(i);
+                                ImGui.tableNextRow();
+                                if (ImGui.tableSetColumnIndex(0)) {
+                                    String dt = dateTimeFormatter.format(detail.time);
+                                    String id = String.format("%s##Find%d", dt, i);
+                                    if (ImGui.selectable(id, false, ImGuiSelectableFlags.SpanAllColumns)) {
+                                    }
+                                }
 
-                            if (ImGui.tableSetColumnIndex(1)) {
-                                ImGui.text("BBBBBB");
-                            }
+                                if (ImGui.tableSetColumnIndex(1)) {
+                                    ImGui.text(detail.priority);
+                                }
 
-                            if (ImGui.tableSetColumnIndex(2)) {
-                                ImGui.text("CCCCCCCCC");
-                            }
+                                if (ImGui.tableSetColumnIndex(2)) {
+                                    ImGui.text(detail.threadName);
+                                }
 
-                            if (ImGui.tableSetColumnIndex(3)) {
-                                ImGui.text("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
+                                if (ImGui.tableSetColumnIndex(3)) {
+                                    String content = detail.getContent();
+                                    int index = content.indexOf("\n");
+                                    if (index >= 0) {
+                                        content = content.substring(0, index);
+                                    }
+                                    ImGui.text(content);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
+
                     ImGui.endTable();
                 }
 
@@ -319,6 +349,9 @@ public class Main extends Application {
                 try {
                     db = ILogParser.Log.load(importData.filesRight);
                     db.start();
+
+                    dbFind = new ILogParser.Log();
+                    dbFind.lines = db.lines;
                 } catch (Throwable e) {
                     e.printStackTrace();
                 }
