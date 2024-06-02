@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 public class Main extends Application {
-    public class Filter {
+    public static class Filter {
         ImString imstr = new ImString(1024);
         ImBoolean imIsCaseSensitive = new ImBoolean(false);
         boolean isRegexError = false;
@@ -36,22 +36,22 @@ public class Main extends Application {
 
     DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm:ss.SSS");
 
-    public class ImportData {
+    public static class ImportData {
         ImString imDirectoryPath = new ImString("D:/Projects/log-parser/WV-ST-20240308/", 1024);
         List<Path> filesLeft = new ArrayList<>();
         List<Path> filesRight = new ArrayList<>();
     }
 
-    private ImportData importData = new ImportData();
+    private final ImportData importData = new ImportData();
 
-    public class FindData {
+    public static class FindData {
         int line_selected = -1;
         ImString imRawText = new ImString(50);
     }
 
     FindData findData = new FindData();
 
-    private ExecutorService executor = Executors.newWorkStealingPool();
+    private final ExecutorService executor = Executors.newWorkStealingPool();
 
     private volatile ILogParser.Log db;
 
@@ -121,7 +121,6 @@ public class Main extends Application {
             executor.submit(() -> {
                 List<ILogParser.LogDetail> lines_filtered = new ArrayList<>();
                 parseFilter(filter);
-
                 try {
                     for (ILogParser.LogDetail detail : db.lines) {
                         if (isLineMatchFilter(detail, filter)) {
@@ -133,8 +132,6 @@ public class Main extends Application {
                     filter.isRegexError = true;
                     e.printStackTrace();
                 }
-
-
             });
         }
         ImGui.sameLine();
@@ -193,11 +190,8 @@ public class Main extends Application {
             }
             ImGui.endTable();
         }
-
         ImGui.endChild();
-
         ImGui.spacing();
-
         // If can't resize, then remove this
         ImGui.beginChild("##LowerSection", ImGui.getContentRegionAvailX(), ImGui.getContentRegionAvailY(), false);
 
