@@ -366,6 +366,11 @@ public class Main extends Application {
         int condEnd = 0;
 
         try {
+            int regexFlag = 0;
+            if (!filter.imIsCaseSensitive.get()) {
+                regexFlag |= Pattern.CASE_INSENSITIVE;
+            }
+            // Parsing logic could be done in regex instead
             for (int i = 0; i < filterStr.length(); i++) {
                 char c = filterStr.charAt(i);
                 if (colEnd < 1) {
@@ -382,7 +387,7 @@ public class Main extends Application {
                             ;
                         condEnd = i;
                         String colName = filterStr.substring(colStart, colEnd);
-                        Pattern pattern = Pattern.compile("^.*" + filterStr.substring(condStart, condEnd) + ".*$");
+                        Pattern pattern = Pattern.compile("^.*" + filterStr.substring(condStart, condEnd) + ".*$", regexFlag);
                         filter.mapPattern.put(colName.toUpperCase(), pattern);
                     }
                 } else if (condEnd > 0) {
@@ -402,7 +407,7 @@ public class Main extends Application {
             }
 
             if (filter.mapPattern.isEmpty()) {
-                Pattern pattern = Pattern.compile("^.*" + filterStr + ".*$");
+                Pattern pattern = Pattern.compile("^.*" + filterStr + ".*$", regexFlag);
                 filter.mapPattern.put("*", pattern);
             }
         } catch (PatternSyntaxException e) {
