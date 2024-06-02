@@ -13,10 +13,7 @@ import imgui.type.ImString;
 import java.io.IOException;
 import java.nio.file.*;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
@@ -27,12 +24,12 @@ public class Main extends Application {
         ImString imstr = new ImString(1024);
         ImBoolean imIsCaseSensitive = new ImBoolean(false);
         boolean isRegexError = false;
-        Pattern pattern = null;
+
+        Map<String, Pattern> mapPattern = new HashMap<>();
     }
 
     Filter filter = new Filter();
     Filter detail_filter = new Filter();
-    ImString imRawText = new ImString(2048);
 
     ImBoolean imShowLogWindow = new ImBoolean(true);
     ImBoolean imShowImportWindow = new ImBoolean(true);
@@ -43,10 +40,16 @@ public class Main extends Application {
         ImString imDirectoryPath = new ImString("D:/Projects/log-parser/WV-ST-20240308/", 1024);
         List<Path> filesLeft = new ArrayList<>();
         List<Path> filesRight = new ArrayList<>();
-
     }
 
     private ImportData importData = new ImportData();
+
+    public class FindData {
+        int line_selected = -1;
+        ImString imRawText = new ImString(50);
+    }
+
+    FindData findData = new FindData();
 
     private ExecutorService executor = Executors.newWorkStealingPool();
 
@@ -117,16 +120,11 @@ public class Main extends Application {
         if (ImGui.inputTextWithHint("Filter", "Filter", filter.imstr, ImGuiInputTextFlags.EnterReturnsTrue)) {
             executor.submit(() -> {
                 List<ILogParser.LogDetail> lines_filtered = new ArrayList<>();
-                String filterStr = filter.imstr.toString();
-                filter.isRegexError = false;
+                parseFilter(filter);
 
                 try {
-                    filter.pattern = Pattern.compile(filterStr);
                     for (ILogParser.LogDetail detail : db.lines) {
-                        if (filter.pattern.matcher(detail.threadName).find()
-                                || filter.pattern.matcher(detail.priority).find()
-                                || filter.pattern.matcher(detail.fileName).find()
-                                || filter.pattern.matcher(detail.getContent()).find()) {
+                        if (isLineMatchFilter(detail, filter)) {
                             lines_filtered.add(detail);
                         }
                     }
@@ -135,6 +133,8 @@ public class Main extends Application {
                     filter.isRegexError = true;
                     e.printStackTrace();
                 }
+
+
             });
         }
         ImGui.sameLine();
@@ -164,7 +164,12 @@ public class Main extends Application {
                         ILogParser.LogDetail detail = db.lines_filtered.get(i);
                         ImGui.tableNextRow();
                         if (ImGui.tableSetColumnIndex(0)) {
-                            ImGui.text(dateTimeFormatter.format(detail.time));
+                            String dt = dateTimeFormatter.format(detail.time);
+                            String id = String.format("%s##%d", dt, i);
+                            if (ImGui.selectable(id, false, ImGuiSelectableFlags.SpanAllColumns)) {
+                                findData.line_selected = i;
+                                findData.imRawText = new ImString(detail.getContent());
+                            }
                         }
 
                         if (ImGui.tableSetColumnIndex(1)) {
@@ -176,7 +181,12 @@ public class Main extends Application {
                         }
 
                         if (ImGui.tableSetColumnIndex(3)) {
-                            ImGui.text(detail.getContent());
+                            String content = detail.getContent();
+                            int index = content.indexOf("\n");
+                            if (index >= 0) {
+                                content = content.substring(0, index);
+                            }
+                            ImGui.text(content);
                         }
                     }
                 });
@@ -245,12 +255,12 @@ public class Main extends Application {
             }
 
             if (ImGui.beginTabItem("Info")) {
-                ImGui.textWrapped(imRawText.toString());
+                ImGui.textWrapped(findData.imRawText.toString());
                 ImGui.endTabItem();
             }
 
             if (ImGui.beginTabItem("Raw")) {
-                ImGui.inputTextMultiline("##source", imRawText, ImGui.getContentRegionAvailX(), ImGui.getContentRegionAvailY());
+                ImGui.inputTextMultiline("##source", findData.imRawText, ImGui.getContentRegionAvailX(), ImGui.getContentRegionAvailY());
                 ImGui.endTabItem();
             }
 
@@ -338,5 +348,98 @@ public class Main extends Application {
 
         ImGui.endChild();
         ImGui.end();
+    }
+
+    static void resetFilter(Filter filter) {
+        filter.mapPattern.clear();
+        filter.isRegexError = false;
+    }
+
+
+    static void parseFilter(Filter filter) {
+        resetFilter(filter);
+        String filterStr = filter.imstr.toString();
+
+        int colStart = 0;
+        int colEnd = 0;
+        int condStart = 0;
+        int condEnd = 0;
+
+        try {
+            for (int i = 0; i < filterStr.length(); i++) {
+                char c = filterStr.charAt(i);
+                if (colEnd < 1) {
+                    for (; i < filterStr.length() && filterStr.charAt(i) == ' '; i++) ;
+                    colStart = i;
+                    for (; i + 1 < filterStr.length() && filterStr.charAt(i + 1) != ' ' && filterStr.charAt(i + 1) != '='; i++)
+                        ;
+                    colEnd = i + 1;
+                } else if (condStart < 1) {
+                    if (c == '\'' || c == '"') {
+                        i = i + 1;
+                        condStart = i;
+                        for (; i < filterStr.length() && (filterStr.charAt(i) != '\'' && filterStr.charAt(i) != '"'); i++)
+                            ;
+                        condEnd = i;
+                        String colName = filterStr.substring(colStart, colEnd);
+                        Pattern pattern = Pattern.compile("^.*" + filterStr.substring(condStart, condEnd) + ".*$");
+                        filter.mapPattern.put(colName.toUpperCase(), pattern);
+                    }
+                } else if (condEnd > 0) {
+                    if (i + 2 < filterStr.length()) {
+                        String s = filterStr.substring(i, i + 3);
+                        if (s.equalsIgnoreCase("AND")) {
+                            i = i + 3;
+                            for (; i + 1 < filterStr.length() && filterStr.charAt(i + 1) == ' '; i++) ;
+                            colStart = i + 1;
+                            colEnd = 0;
+                            condStart = 0;
+                            condEnd = 0;
+                        }
+                    }
+                }
+                for (; i + 1 < filterStr.length() && filterStr.charAt(i + 1) == ' '; i++) ;
+            }
+
+            if (filter.mapPattern.isEmpty()) {
+                Pattern pattern = Pattern.compile("^.*" + filterStr + ".*$");
+                filter.mapPattern.put("*", pattern);
+            }
+        } catch (PatternSyntaxException e) {
+            e.printStackTrace();
+            filter.isRegexError = true;
+        }
+    }
+
+
+    static boolean isLineMatchFilter(ILogParser.LogDetail detail, Filter filter) {
+        Pattern patternDefault = filter.mapPattern.get("*");
+        boolean isAnyMatchTrue = filter.mapPattern.size() == 1 && patternDefault != null;
+        Map<String, String> map = new HashMap<>();
+        map.put("C1", detail.priority);
+        map.put("LV", detail.priority);
+        map.put("C2", detail.threadName);
+        map.put("THREAD", detail.threadName);
+        map.put("C3", detail.getContent());
+        map.put("CONTENT", detail.getContent());
+
+        for (Map.Entry<String, String> kv : map.entrySet()) {
+            Pattern pattern = filter.mapPattern.getOrDefault(kv.getKey(), patternDefault);
+            if (pattern == null) {
+                continue;
+            }
+            String content = kv.getValue();
+            boolean isMatch = pattern.matcher(content).find();
+            if (!isAnyMatchTrue) {
+                if (!isMatch) {
+                    return false;
+                }
+            } else {
+                if (isMatch) {
+                    return true;
+                }
+            }
+        }
+        return !isAnyMatchTrue;
     }
 }
