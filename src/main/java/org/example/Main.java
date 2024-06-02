@@ -56,6 +56,10 @@ public class Main extends Application {
     private volatile ILogParser.Log db;
     private volatile ILogParser.Log dbFind;
 
+    int scrollToID = -1;
+    boolean scrolled = true;
+    int clipperItemCount = -1;
+
     @Override
     protected void configure(Configuration config) {
         config.setTitle("Log Parser");
@@ -119,6 +123,9 @@ public class Main extends Application {
         ImGui.begin("Log Parser", imShowLogWindow);
 
         if (ImGui.inputTextWithHint("Filter", "Filter", filter.imstr, ImGuiInputTextFlags.EnterReturnsTrue)) {
+            // TODO show search progress
+            // TODO prevent 2nd search while 1st search is running
+            // TODO search should reset UI like find panel & scroll position
             executor.submit(() -> {
                 List<ILogParser.LogDetail> lines_filtered = new ArrayList<>();
                 parseFilter(filter);
@@ -148,7 +155,17 @@ public class Main extends Application {
 
         ImGui.beginChild("ChildL", ImGui.getContentRegionAvailX(), ImGui.getContentRegionAvailY() * 0.7f, false, ImGuiWindowFlags.HorizontalScrollbar);
 
-        // TODO clipper scroll to highlight
+        if (!scrolled && clipperItemCount > 0) {
+            scrolled = true;
+            int targetRow = 0;
+            for (; targetRow < db.lines_filtered.size(); targetRow++) {
+                if (db.lines_filtered.get(targetRow).id == scrollToID) {
+                    break;
+                }
+            }
+            float h = ImGui.getTextLineHeightWithSpacing();
+            ImGui.setScrollY((targetRow - clipperItemCount / 2.0f) * h);
+        }
 
         if (ImGui.beginTable("LogTable", 4, ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable)) {
             ImGui.tableSetupColumn("Time", ImGuiTableColumnFlags.WidthFixed);
@@ -158,6 +175,7 @@ public class Main extends Application {
             ImGui.tableHeadersRow();
 
             if (db != null) {
+                final int[] count = {0};
                 ImGuiListClipper.forEach(db.lines_filtered.size(), new ImListClipperCallback() {
                     @Override
                     public void accept(int i) {
@@ -165,7 +183,7 @@ public class Main extends Application {
                         ImGui.tableNextRow();
                         if (ImGui.tableSetColumnIndex(0)) {
                             String dt = dateTimeFormatter.format(detail.time);
-                            String id = String.format("%s##%d", dt, i);
+                            String id = String.format("%s##%d", dt, detail.id);
                             if (ImGui.selectable(id, false, ImGuiSelectableFlags.SpanAllColumns)) {
                                 findData.line_selected = i;
                                 findData.imRawText = new ImString(detail.getContent());
@@ -188,8 +206,17 @@ public class Main extends Application {
                             }
                             ImGui.text(content);
                         }
+
+                        if (scrollToID == detail.id) {
+                            ImGui.tableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.getColorU32(0.7f, 0.7f, 0.1f, 1));
+                        }
+                        count[0]++;
                     }
                 });
+
+                if (clipperItemCount < 0 && count[0] > 0) {
+                    clipperItemCount = count[0];
+                }
             }
             ImGui.endTable();
         }
@@ -245,8 +272,10 @@ public class Main extends Application {
                                 ImGui.tableNextRow();
                                 if (ImGui.tableSetColumnIndex(0)) {
                                     String dt = dateTimeFormatter.format(detail.time);
-                                    String id = String.format("%s##Find%d", dt, i);
+                                    String id = String.format("%s##Find%d", dt, detail.id);
                                     if (ImGui.selectable(id, false, ImGuiSelectableFlags.SpanAllColumns)) {
+                                        scrollToID = detail.id;
+                                        scrolled = false;
                                     }
                                 }
 

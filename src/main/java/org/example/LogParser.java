@@ -17,6 +17,7 @@ public class LogParser implements ILogParser {
         log.loadStatus.isLoading = true;
 
         LogDetail detail = null;
+        int id = 0;
         for (Path p : log.loadStatus.allPaths) {
             String currentFileName = p.getFileName().toString();
             try (var reader = Files.newBufferedReader(p)) {
@@ -28,7 +29,7 @@ public class LogParser implements ILogParser {
                         }
                         String dt = LocalDateTime.now().getYear() + "-" + matcher.group(3);
                         LocalDateTime localDateTime = LocalDateTime.parse(dt, dateTimeFormatter);
-                        detail = new LogDetail(localDateTime, matcher.group(2), matcher.group(1), p.toString(), matcher.group(4));
+                        detail = new LogDetail(id++, localDateTime, matcher.group(2), matcher.group(1), p.toString(), matcher.group(4));
                         log.loadStatus.currentFileName = currentFileName;
                     } else {
                         if (detail != null) {

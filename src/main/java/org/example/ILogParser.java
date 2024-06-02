@@ -8,12 +8,14 @@ import java.util.List;
 public interface ILogParser {
 
     class LogDetail {
+        final int id;
         final LocalDateTime time;
         final String threadName, priority, fileName;
         private String content;
         private StringBuilder contentBuilder;
 
-        public LogDetail(LocalDateTime time, String threadName, String priority, String fileName, String content) {
+        public LogDetail(int id, LocalDateTime time, String threadName, String priority, String fileName, String content) {
+            this.id = id;
             this.time = time;
             this.threadName = threadName;
             this.priority = priority;
