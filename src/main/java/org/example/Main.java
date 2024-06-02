@@ -445,6 +445,9 @@ public class Main extends Application {
 
 
     static boolean isLineMatchFilter(ILogParser.LogDetail detail, Filter filter) {
+        if (filter.mapPattern.isEmpty()) {
+            return true;
+        }
         Pattern patternDefault = filter.mapPattern.get("*");
         boolean isAnyMatchTrue = filter.mapPattern.size() == 1 && patternDefault != null;
         Map<String, String> map = new HashMap<>();
